@@ -48,7 +48,7 @@ def index():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "Kirimkan link PoopHD dan saya akan proses untukmu!")
+    bot.reply_to(message, "Kirimkan link Doodstream dan saya akan proses untukmu!")
 
 @bot.message_handler(func=lambda message: message.text.startswith("http"))
 def handle_url(message):
@@ -62,7 +62,7 @@ def handle_url(message):
         resp = requests.post(api_url, headers=headers, json=payload)
         result = resp.json()
         if result.get("status") != "success":
-            return bot.reply_to(message, f"Gagal")
+            return bot.reply_to(message, f"Gagal: {result.get('message', 'Terjadi kesalahan.')}")
 
         data = result.get('data', [{}])[0]
         filename = data.get('filename', 'video.mp4').replace('/', '_')
@@ -82,12 +82,13 @@ def handle_url(message):
         prog_msg = bot.send_message(chat_id, initial_text, parse_mode="MarkdownV2")
 
         # Download
-        r = requests.get(download_url, stream=True)
+        r = requests.get(download_url, headers={"User-Agent": "Mozilla/5.0"}, stream=True)
         if total_size == 0:
             total_size = int(r.headers.get('content-length', 0))
         chunk_size = 1024 * 8
         done = 0
         start_time = time.time()
+        last_update_time = start_time
         local_path = filename
 
         with open(local_path, 'wb') as f:
@@ -97,27 +98,31 @@ def handle_url(message):
                 f.write(chunk)
                 done += len(chunk)
 
-                percent = done / total_size * 100 if total_size else 0
-                bar = build_progress_bar(percent)
-                elapsed = time.time() - start_time
-                speed = done / elapsed if elapsed > 0 else 0
-                remaining = (total_size - done) / speed if speed > 0 else 0
+                now = time.time()
+                if now - last_update_time >= 3:  # update setiap 3 detik
+                    percent = done / total_size * 100 if total_size else 0
+                    bar = build_progress_bar(percent)
+                    elapsed = now - start_time
+                    speed = done / elapsed if elapsed > 0 else 0
+                    remaining = (total_size - done) / speed if speed > 0 else 0
 
-                raw_text = (
-                    f"┏ 𝙁𝙄𝙇𝙀𝙉𝘼𝙈𝙀 : {filename}\n"
-                    f"┠ [{bar}] {percent:.2f}%\n"
-                    f"┠ ᴘʀᴏᴄᴇssᴇᴅ : {format_size(done)} ᴏғ {format_size(total_size)}\n"
-                    f"┠ ʀᴇᴍᴀɪɴɪɴɢ : {format_time(remaining)}\n"
-                    f"┠ sᴘᴇᴇᴅ : {format_size(speed)}/s\n"
-                    f"┠ ᴇʟᴀᴘsᴇᴅ : {format_time(elapsed)}\n"
-                    f"┠ sᴛᴀᴛᴜs : Downloading...\n"
-                    f"┗ ʟᴇᴇᴄʜᴇᴅ : @Nathanaeru ({message.from_user.id})"
-                )
-                safe_text = escape_markdown(raw_text)
-                try:
-                    bot.edit_message_text(safe_text, chat_id, prog_msg.message_id, parse_mode="MarkdownV2")
-                except Exception:
-                    pass
+                    raw_text = (
+                        f"┏ ғɪʟᴇɴᴀᴍᴇ : {filename}\n"
+                        f"┠ [{bar}] {percent:.2f}%\n"
+                        f"┠ ᴘʀᴏᴄᴇssᴇᴅ : {format_size(done)} ᴏғ {format_size(total_size)}\n"
+                        f"┠ ʀᴇᴍᴀɪɴɪɴɢ : {format_time(remaining)}\n"
+                        f"┠ sᴘᴇᴇᴅ : {format_size(speed)}/s\n"
+                        f"┠ ᴇʟᴀᴘsᴇᴅ : {format_time(elapsed)}\n"
+                        f"┠ sᴛᴀᴛᴜs : Downloading...\n"
+                        f"┗ ʟᴇᴇᴄʜᴇᴅ : @{message.from_user.username or 'User'} ({message.from_user.id})"
+                    )
+                    safe_text = escape_markdown(raw_text)
+                    try:
+                        bot.edit_message_text(safe_text, chat_id, prog_msg.message_id, parse_mode="MarkdownV2")
+                    except Exception:
+                        pass
+
+                    last_update_time = now
 
         # Send final video
         with open(local_path, 'rb') as video_file:
@@ -129,14 +134,14 @@ def handle_url(message):
                 f"📦 *Size :* `{escape_markdown(total_size_str)}`\n"
                 f"📅 *Upload Date :* `{escape_markdown(upload_date)}`\n"
                 f"*━━━━━━━━━━━━━━━━━━*\n"
-                f"*Bot :* @NathanPoopHD_bot\n*Dev :* @Nathanaeru"
+                f"*Bot :* @YourBotName\n*Dev :* @Nathanaeru"
             )
             bot.send_video(chat_id, video=video_file, caption=caption, parse_mode="MarkdownV2")
 
         os.remove(local_path)
     except Exception as e:
         err = escape_markdown(str(e))
-        bot.reply_to(message, f"Terjadi error")
+        bot.reply_to(message, f"Terjadi error: {err}")
 
 
 def run_bot():
